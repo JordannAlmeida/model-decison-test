@@ -12,5 +12,7 @@ wheels/
 # Environment
 .env
 
+.docs/
+
 # Generated reports and traces
 output/
