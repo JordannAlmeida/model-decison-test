@@ -1,3 +1,5 @@
+from typing import Any
+
 import httpx
 
 from modelDecision.integration import ModelDecision
@@ -12,10 +14,13 @@ class JevModelDecision(ModelDecision):
         self._api_key = api_key
         self._timeout = timeout
 
-    def call(self, request: Request) -> Response:
+    def call(self, request: Request, sent: list[dict[str, Any]] | None = None) -> Response:
+        body = request.model_dump(mode="json", exclude_none=True)
+        if sent is not None:
+            sent.append(body)
         http_response = httpx.post(
             self._api_url,
-            json=request.model_dump(mode="json", exclude_none=True),
+            json=body,
             headers={"Authorization": f"Bearer {self._api_key}"},
             timeout=self._timeout,
         )

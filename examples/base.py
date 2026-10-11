@@ -43,11 +43,12 @@ class Example(ABC):
                         error=_describe(exc), latency_ms=0.0)
 
         payload = request.model_dump(mode="json", exclude_none=True)
+        sent: list[dict] = []
         try:
-            response = self._model_decision.call(request)
+            response = self._model_decision.call(request, sent)
         except Exception as exc:
-            return Call(label=label, request=payload, error=_describe(exc), latency_ms=_since(started))
-        return Call(label=label, request=payload, response=response, latency_ms=_since(started))
+            return Call(label=label, request=payload, sent=sent, error=_describe(exc), latency_ms=_since(started))
+        return Call(label=label, request=payload, sent=sent, response=response, latency_ms=_since(started))
 
     def _ask_each(
         self,

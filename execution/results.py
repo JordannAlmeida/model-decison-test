@@ -17,7 +17,10 @@ class Call(BaseModel):
     """One request sent to the decision model, with its response (or error)."""
 
     label: str | None = None
+    # the Jev-shaped request built by the example
     request: dict[str, Any]
+    # bodies actually POSTed to the provider, in order (may differ from `request`, e.g. Laya)
+    sent: list[dict[str, Any]] = Field(default_factory=list)
     response: Response | None = None
     error: str | None = None
     latency_ms: float

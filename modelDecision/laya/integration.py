@@ -41,7 +41,7 @@ class LayaModelDecision(ModelDecision):
         self._head_max_len = head_max_len
         self._tournament_group = tournament_group
 
-    def call(self, request: Request) -> Response:
+    def call(self, request: Request, sent: list[dict[str, Any]] | None = None) -> Response:
         payload = request.model_dump(mode="json", exclude_none=True)
         if payload["model"] not in _CHECKPOINTS:
             payload["model"] = self._checkpoint
@@ -49,12 +49,12 @@ class LayaModelDecision(ModelDecision):
         payload["head_max_len"] = self._head_max_len
 
         questions = payload["questions"]
-        finalists = self._tournament(payload)
+        finalists = self._tournament(payload, sent)
         payload["questions"] = {
             qid: _narrowed(question, finalists[qid]) if qid in finalists else question
             for qid, question in questions.items()
         }
-        body = self._post(payload)
+        body = self._post(payload, sent)
         for qid in finalists:
             probabilities = body["answers"][qid]["probabilities"]
             body["answers"][qid]["probabilities"] = {
@@ -62,7 +62,7 @@ class LayaModelDecision(ModelDecision):
             }
         return Response.model_validate(body)
 
-    def _tournament(self, payload: dict[str, Any]) -> dict[str, list[str]]:
+    def _tournament(self, payload: dict[str, Any], sent: list[dict[str, Any]] | None) -> dict[str, list[str]]:
         """Finalist labels of every choice larger than the group size."""
         group = self._tournament_group
         labels = {
@@ -82,13 +82,15 @@ class LayaModelDecision(ModelDecision):
             round_questions = {
                 str(i): _narrowed(payload["questions"][qid], kept) for i, (qid, kept) in enumerate(groups)
             }
-            answers = self._post({**payload, "questions": round_questions})["answers"]
+            answers = self._post({**payload, "questions": round_questions}, sent)["answers"]
             winners: dict[str, list[str]] = {}
             for i, (qid, _kept) in enumerate(groups):
                 winners.setdefault(qid, []).append(answers[str(i)]["choice"])
             labels.update(winners)
 
-    def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _post(self, payload: dict[str, Any], sent: list[dict[str, Any]] | None) -> dict[str, Any]:
+        if sent is not None:
+            sent.append(payload)
         http_response = httpx.post(self._api_url, json=payload, timeout=self._timeout)
         http_response.raise_for_status()
         return http_response.json()

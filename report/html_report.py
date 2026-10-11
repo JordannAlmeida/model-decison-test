@@ -12,6 +12,9 @@ from typing import Any
 from execution.results import Call, Case, ExampleResult, RunResult, Scenario
 from modelDecision.scheme import ChoiceAnswer, NoulAnswer, ScoreAnswer
 
+# strings in the request view longer than this are cut down (the saved JSON keeps them whole)
+_TRUNCATE_AT = 300
+
 
 class HtmlReport:
     def __init__(self, run: RunResult) -> None:
@@ -216,8 +219,8 @@ class HtmlReport:
             f"<details class='call'{' open' if open_answers else ''}>"
             f"<summary><b>{escape(call.label or 'chamada')}</b> <span class='muted'>· {escape(' · '.join(meta))}</span>"
             f"</summary><div class='answers'>{answers}</div>"
-            f"<details class='raw'><summary>Request JSON</summary><pre>{_json(call.request)}</pre></details>"
-            f"<details class='raw'><summary>Response JSON</summary><pre>{_json(response_json)}</pre></details>"
+            + _requests(call)
+            + f"<details class='raw'><summary>Response JSON</summary><pre>{_json(response_json)}</pre></details>"
             "</details>"
         )
 
@@ -254,6 +257,31 @@ def _bar(label: str, probability: float, chosen: bool) -> str:
 
 
 # ---------- helpers ----------
+
+def _requests(call: Call) -> str:
+    """Bodies POSTed to the provider. Laya's can differ from the Jev-shaped request built by the example."""
+    if not call.sent or call.sent == [call.request]:
+        return _raw("Request JSON", call.request)
+    built = _raw("Request montado pelo exemplo", call.request)
+    sent = "".join(_raw(f"Request enviado {i} de {len(call.sent)} ao provider", body)
+                   for i, body in enumerate(call.sent, start=1))
+    return built + sent
+
+
+def _raw(title: str, data: Any) -> str:
+    return f"<details class='raw'><summary>{escape(title)}</summary><pre>{_json(_truncated(data))}</pre></details>"
+
+
+def _truncated(data: Any) -> Any:
+    """Copy of `data` with strings longer than the limit cut down, for display only."""
+    if isinstance(data, str) and len(data) > _TRUNCATE_AT:
+        return f"{data[:_TRUNCATE_AT]}… [+{len(data) - _TRUNCATE_AT} caracteres]"
+    if isinstance(data, dict):
+        return {key: _truncated(value) for key, value in data.items()}
+    if isinstance(data, list):
+        return [_truncated(item) for item in data]
+    return data
+
 
 def _cases(example: ExampleResult, bonus: bool) -> list[Case]:
     return [case for scenario in example.scenarios if scenario.bonus == bonus for case in scenario.cases]
